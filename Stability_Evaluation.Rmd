@@ -1,0 +1,69 @@
+---
+title: "Stability_EEvaluation"
+author: "Pu Zeng"
+date: "9/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries, message=FALSE, warning=FALSE, include=FALSE}
+library(knitr)
+library(magrittr)
+library(dplyr)
+library(stats)
+library(ggplot2)
+library(tidyverse)
+library(ggpubr)
+library(RColorBrewer)
+library(kableExtra)
+library(ggh4x)
+library(qwraps2)
+```
+
+
+```{r Organize Data, message=FALSE, warning=FALSE, include=FALSE}
+TITER_DF = read.csv("data/TITER_23_143.csv", stringsAsFactors = FALSE)
+
+#Do the log transformation on base 10
+TITER_DF$TITER = log10(TITER_DF$TITER)
+#This participants only have observations on week 23 on CH505
+TITER_DF = TITER_DF %>% filter(PARTICIPANTID!="6606", ENV_PROTEIN!="CH848", GROUP!="Control", VISIT_NO!="0")
+
+#Transform into df with PARTICIPANTID as the row name
+
+TITER_DF_23 = TITER_DF %>% filter(VISIT_NO=="23")
+TITER_DF_143 = TITER_DF %>% filter(VISIT_NO=="143")
+
+TITER_DF_23 = reshape(TITER_DF_23, direction = "wide", idvar = "PARTICIPANTID", timevar = "ENV_PROTEIN")
+TITER_DF_143 = reshape(TITER_DF_143, direction = "wide", idvar = "PARTICIPANTID", timevar = "ENV_PROTEIN")
+
+rownames(TITER_DF_23) = paste(TITER_DF_23$PARTICIPANTID,"W23", sep = " ")
+rownames(TITER_DF_143) = paste(TITER_DF_143$PARTICIPANTID,"W143", sep = " ")
+
+#Drop columns
+TITER_DF_23 = TITER_DF_23[,-c(5,7,8,10,11,13,14,16,17,19)]
+TITER_DF_143 = TITER_DF_143[,-c(5,7,8,10,11,13,14,16,17,19)]
+
+#Rename some columns
+names(TITER_DF_23)[names(TITER_DF_23)=="GROUP.1086c"] = "GROUP"
+names(TITER_DF_23)[names(TITER_DF_23)=="VISIT_NO.1086c"] = "VISIT_NO"
+
+names(TITER_DF_143)[names(TITER_DF_143)=="GROUP.1086c"] = "GROUP"
+names(TITER_DF_143)[names(TITER_DF_143)=="VISIT_NO.1086c"] = "VISIT_NO"
+
+TITER_DF_COMBINED = rbind.data.frame(TITER_DF_23, TITER_DF_143)
+TITER_DF_COMBINED = TITER_DF_COMBINED[, c(1,4,2,3,5,6,7,8,9)]
+
+TITER_DF_COMBINED_COPY = TITER_DF_COMBINED
+```
+
+```{r 1% Perturbations}
+PERTURB_ALL_PROTEIN = TITER_DF_COMBINED_COPY %>% 
+  select(TITER.1086c, TITER.A244, TITER.CAP174c, TITER.CAP260c, TITER.Ko224c, TITER.CH505)
+
+
+```
+
