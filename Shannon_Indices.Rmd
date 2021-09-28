@@ -1,0 +1,427 @@
+---
+title: "Shannon_Indices"
+author: "Pu Zeng"
+date: "9/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(knitr)
+library(magrittr)
+library(dplyr)
+library(stats)
+library(ggplot2)
+library(tidyverse)
+library(ggpubr)
+library(RColorBrewer)
+library(kableExtra)
+library(ggh4x)
+library(qwraps2)
+library(DT)
+library(knitr)
+library(reshape2)
+```
+
+## Shannon Index
+
+```{r Organize the DF, include=FALSE}
+TITER_DF = read.csv("data/TITER_23_143.csv", stringsAsFactors = FALSE)
+
+#Do the log transformation on base 10
+TITER_DF$TITER = log10(TITER_DF$TITER)
+#This participants only have observations on week 23 on CH505
+TITER_DF = TITER_DF %>% filter(PARTICIPANTID!="6606", ENV_PROTEIN!="CH848", GROUP!="Control", VISIT_NO!="0")
+
+#Transform into df with PARTICIPANTID as the row name
+
+TITER_DF_23 = TITER_DF %>% filter(VISIT_NO=="23")
+TITER_DF_143 = TITER_DF %>% filter(VISIT_NO=="143")
+
+TITER_DF_23 = reshape(TITER_DF_23, direction = "wide", idvar = "PARTICIPANTID", timevar = "ENV_PROTEIN")
+TITER_DF_143 = reshape(TITER_DF_143, direction = "wide", idvar = "PARTICIPANTID", timevar = "ENV_PROTEIN")
+
+rownames(TITER_DF_23) = paste(TITER_DF_23$PARTICIPANTID,"W23", sep = " ")
+rownames(TITER_DF_143) = paste(TITER_DF_143$PARTICIPANTID,"W143", sep = " ")
+
+#Drop columns
+TITER_DF_23 = TITER_DF_23[,-c(5,7,8,10,11,13,14,16,17,19)]
+TITER_DF_143 = TITER_DF_143[,-c(5,7,8,10,11,13,14,16,17,19)]
+
+#Rename some columns
+names(TITER_DF_23)[names(TITER_DF_23)=="GROUP.1086c"] = "GROUP"
+names(TITER_DF_23)[names(TITER_DF_23)=="VISIT_NO.1086c"] = "VISIT_NO"
+
+names(TITER_DF_143)[names(TITER_DF_143)=="GROUP.1086c"] = "GROUP"
+names(TITER_DF_143)[names(TITER_DF_143)=="VISIT_NO.1086c"] = "VISIT_NO"
+
+TITER_DF_COMBINED = rbind.data.frame(TITER_DF_23, TITER_DF_143)
+TITER_DF_COMBINED = TITER_DF_COMBINED[, c(1,4,2,3,5,6,7,8,9)]
+
+TITER_DF_COMBINED_COPY = TITER_DF_COMBINED
+```
+
+```{r All env protein, echo=FALSE}
+ALL_ENV_PROTEIN_23 = TITER_DF_23 %>% select(TITER.1086c, TITER.A244,
+                                            TITER.CAP174c, TITER.CAP260c,
+                                            TITER.Ko224c, TITER.CH505)
+
+ABUNDANCE_ALL_ENV_PROTEIN_23 = ALL_ENV_PROTEIN_23
+
+for (i in 1:ncol(ALL_ENV_PROTEIN_23)) {
+  ABUNDANCE_ALL_ENV_PROTEIN_23[i] = ABUNDANCE_ALL_ENV_PROTEIN_23[i] / sum(ABUNDANCE_ALL_ENV_PROTEIN_23[i])
+}
+ABUNDANCE_ALL_ENV_PROTEIN_23$Shannon_Index = apply(ABUNDANCE_ALL_ENV_PROTEIN_23,
+                                                   1,
+                                                   function(x) sum(x*log(x)*-1))
+ABUNDANCE_ALL_ENV_PROTEIN_23$Rank = rank(desc(ABUNDANCE_ALL_ENV_PROTEIN_23$Shannon_Index))
+
+
+ALL_ENV_PROTEIN_143 = TITER_DF_143 %>% select(TITER.1086c, TITER.A244,
+                                            TITER.CAP174c, TITER.CAP260c,
+                                            TITER.Ko224c, TITER.CH505)
+
+ABUNDANCE_ALL_ENV_PROTEIN_143 = ALL_ENV_PROTEIN_143
+
+for (i in 1:ncol(ALL_ENV_PROTEIN_143)) {
+  ABUNDANCE_ALL_ENV_PROTEIN_143[i] = ABUNDANCE_ALL_ENV_PROTEIN_143[i] / sum(ABUNDANCE_ALL_ENV_PROTEIN_143[i])
+}
+ABUNDANCE_ALL_ENV_PROTEIN_143$Shannon_Index = apply(ABUNDANCE_ALL_ENV_PROTEIN_143,
+                                                   1,
+                                                   function(x) sum(x*log(x)*-1))
+ABUNDANCE_ALL_ENV_PROTEIN_143$Rank = rank(desc(ABUNDANCE_ALL_ENV_PROTEIN_143$Shannon_Index))
+
+ABUNDANCE_ALL_ENV_PROTEIN = rbind.data.frame(ABUNDANCE_ALL_ENV_PROTEIN_23,
+                                             ABUNDANCE_ALL_ENV_PROTEIN_143)
+
+#ABUNDANCE_ALL_ENV_PROTEIN = TITER_DF_COMBINED_COPY %>% bind_cols(ABUNDANCE_ALL_ENV_PROTEIN)
+
+ALL_ENV_PROTEIN = TITER_DF_COMBINED_COPY
+ALL_ENV_PROTEIN = ALL_ENV_PROTEIN  %>% 
+  rowwise() %>% 
+  mutate(Count = sum(TITER.1086c>2,
+                     TITER.A244>2,
+                     TITER.CAP174c>2,
+                     TITER.CAP260c>2,
+                     TITER.Ko224c>2, 
+                     TITER.CH505>2))
+ALL_ENV_PROTEIN$Shannon_Index = ABUNDANCE_ALL_ENV_PROTEIN$Shannon_Index
+ALL_ENV_PROTEIN$Rank = ABUNDANCE_ALL_ENV_PROTEIN$Rank
+ALL_ENV_PROTEIN = ALL_ENV_PROTEIN %>% arrange(Rank)
+
+#x = ALL_ENV_PROTEIN %>% arrange(Rank) %>% filter(VISIT_NO =="23")
+
+study_week_label = c( "Week 23", "Week 143")
+names(study_week_label) = c("23", "143")
+#names(ALL_ENV_PROTEIN$VISIT_NO) = study_week_label
+# ggplot(data = ALL_ENV_PROTEIN, aes(x = Rank, 
+#                                    y = Shannon_Index, 
+#                                    colour = as.factor(GROUP))) +
+#   geom_point() + 
+#   facet_wrap(.~VISIT_NO,
+#              labeller = labeller(VISIT_NO = study_week_label)) + 
+#   scale_color_brewer(palette = "Dark2") +
+#   labs(x = "Shannon's Index",
+#        y = "Rank",
+#        colour = "Group",
+#        title = "All Env Protein") + theme_bw() +
+#   theme(legend.position = "bottom",
+#         axis.title.y = element_text(size = 11, face = "bold"),
+#         axis.title.x = element_text(size = 11, face = "bold"),
+#         strip.text.x = element_text(size = 11, face = "bold.italic"))
+```
+
+```{r Clade C, echo=FALSE}
+CLADE_C_23 = TITER_DF_23 %>% select(TITER.1086c, 
+                                    TITER.CAP174c, 
+                                    TITER.CAP260c,
+                                    TITER.Ko224c)
+
+ABUNDANCE_CLADE_C_23 = CLADE_C_23
+
+for (i in 1:ncol(CLADE_C_23)) {
+  ABUNDANCE_CLADE_C_23[i] = ABUNDANCE_CLADE_C_23[i] / sum(ABUNDANCE_CLADE_C_23[i])
+}
+ABUNDANCE_CLADE_C_23$Shannon_Index = apply(ABUNDANCE_CLADE_C_23,
+                                                   1,
+                                                   function(x) sum(x*log(x)*-1))
+ABUNDANCE_CLADE_C_23$Rank = rank(desc(ABUNDANCE_CLADE_C_23$Shannon_Index), 
+                                 ties.method = "max")
+
+
+CLADE_C_143 = TITER_DF_143 %>% select(TITER.1086c, 
+                                            TITER.CAP174c, TITER.CAP260c,
+                                            TITER.Ko224c)
+
+ABUNDANCE_CLADE_C_143 = CLADE_C_143
+
+for (i in 1:ncol(CLADE_C_143)) {
+  ABUNDANCE_CLADE_C_143[i] = ABUNDANCE_CLADE_C_143[i] / sum(ABUNDANCE_CLADE_C_143[i])
+}
+ABUNDANCE_CLADE_C_143$Shannon_Index = apply(ABUNDANCE_CLADE_C_143,
+                                                   1,
+                                                   function(x) sum(x*log(x)*-1))
+ABUNDANCE_CLADE_C_143$Rank = rank(desc(ABUNDANCE_CLADE_C_143$Shannon_Index),
+                                  ties.method = "max")
+
+ABUNDANCE_CLADE_C = rbind.data.frame(ABUNDANCE_CLADE_C_23,
+                                             ABUNDANCE_CLADE_C_143)
+
+#ABUNDANCE_CLADE_C = TITER_DF_COMBINED_COPY %>% bind_cols(ABUNDANCE_CLADE_C)
+
+CLADE_C = TITER_DF_COMBINED_COPY %>% 
+  select(PARTICIPANTID,
+         VISIT_NO,
+         GROUP,
+         TITER.1086c,
+         TITER.CAP174c, 
+         TITER.CAP260c,
+         TITER.Ko224c)
+CLADE_C = CLADE_C  %>% 
+  rowwise() %>% 
+  mutate(Count = sum(TITER.1086c>2,
+                     TITER.CAP174c>2,
+                     TITER.CAP260c>2,
+                     TITER.Ko224c>2))
+CLADE_C$Shannon_Index = ABUNDANCE_CLADE_C$Shannon_Index
+CLADE_C$Rank = ABUNDANCE_CLADE_C$Rank
+CLADE_C = CLADE_C %>% arrange(Rank)
+
+#x = CLADE_C %>% arrange(Rank) %>% filter(VISIT_NO =="23")
+
+study_week_label = c( "Week 23", "Week 143")
+names(study_week_label) = c("23", "143")
+#names(CLADE_C$VISIT_NO) = study_week_label
+# ggplot(data = CLADE_C, aes(x = Rank, 
+#                                    y = Shannon_Index, 
+#                                    colour = as.factor(GROUP))) +
+#   geom_point() + 
+#   facet_wrap(.~VISIT_NO,
+#              labeller = labeller(VISIT_NO = study_week_label)) + 
+#   scale_color_brewer(palette = "Dark2") +
+#   labs(x = "Shannon's Index",
+#        y = "Rank",
+#        colour = "Group",
+#        title = "Clade C") + theme_bw() +
+#   theme(legend.position = "bottom",
+#         axis.title.y = element_text(size = 11, face = "bold"),
+#         axis.title.x = element_text(size = 11, face = "bold"),
+#         strip.text.x = element_text(size = 11, face = "bold.italic"))
+```
+
+```{r Trivalent}
+TRIVALENT_23 = TITER_DF_23 %>% select(TITER.CAP174c, 
+                                    TITER.CAP260c,
+                                    TITER.Ko224c)
+
+ABUNDANCE_TRIVALENT_23 = TRIVALENT_23
+
+for (i in 1:ncol(TRIVALENT_23)) {
+  ABUNDANCE_TRIVALENT_23[i] = ABUNDANCE_TRIVALENT_23[i] / sum(ABUNDANCE_TRIVALENT_23[i])
+}
+ABUNDANCE_TRIVALENT_23$Shannon_Index = apply(ABUNDANCE_TRIVALENT_23,
+                                                   1,
+                                                   function(x) sum(x*log(x)*-1))
+ABUNDANCE_TRIVALENT_23$Rank = rank(desc(ABUNDANCE_TRIVALENT_23$Shannon_Index), 
+                                 ties.method = "max")
+
+
+TRIVALENT_143 = TITER_DF_143 %>% select(TITER.CAP174c, 
+                                        TITER.CAP260c,
+                                        TITER.Ko224c)
+
+ABUNDANCE_TRIVALENT_143 = TRIVALENT_143
+
+for (i in 1:ncol(TRIVALENT_143)) {
+  ABUNDANCE_TRIVALENT_143[i] = ABUNDANCE_TRIVALENT_143[i] / sum(ABUNDANCE_TRIVALENT_143[i])
+}
+ABUNDANCE_TRIVALENT_143$Shannon_Index = apply(ABUNDANCE_TRIVALENT_143,
+                                                   1,
+                                                   function(x) sum(x*log(x)*-1))
+ABUNDANCE_TRIVALENT_143$Rank = rank(desc(ABUNDANCE_TRIVALENT_143$Shannon_Index),
+                                  ties.method = "max")
+
+ABUNDANCE_TRIVALENT = rbind.data.frame(ABUNDANCE_TRIVALENT_23,
+                                             ABUNDANCE_TRIVALENT_143)
+
+#ABUNDANCE_TRIVALENT = TITER_DF_COMBINED_COPY %>% bind_cols(ABUNDANCE_TRIVALENT)
+
+TRIVALENT = TITER_DF_COMBINED_COPY %>% 
+  select(PARTICIPANTID,
+         VISIT_NO,
+         GROUP,
+         TITER.CAP174c, 
+         TITER.CAP260c,
+         TITER.Ko224c)
+TRIVALENT = TRIVALENT  %>% 
+  rowwise() %>% 
+  mutate(Count = sum(TITER.CAP174c>2,
+                     TITER.CAP260c>2,
+                     TITER.Ko224c>2))
+TRIVALENT$Shannon_Index = ABUNDANCE_TRIVALENT$Shannon_Index
+TRIVALENT$Rank = ABUNDANCE_TRIVALENT$Rank
+TRIVALENT = TRIVALENT %>% arrange(Rank)
+
+#x = TRIVALENT %>% arrange(Rank) %>% filter(VISIT_NO =="23")
+
+study_week_label = c( "Week 23", "Week 143")
+names(study_week_label) = c("23", "143")
+#names(TRIVALENT$VISIT_NO) = study_week_label
+# ggplot(data = TRIVALENT, aes(x = Rank, 
+#                                    y = Shannon_Index, 
+#                                    colour = as.factor(GROUP))) +
+#   geom_point() + 
+#   facet_wrap(.~VISIT_NO,
+#              labeller = labeller(VISIT_NO = study_week_label)) + 
+#   scale_color_brewer(palette = "Dark2") +
+#   labs(x = "Shannon's Index",
+#        y = "Rank",
+#        colour = "Group",
+#        title = "Trivalent") + theme_bw() +
+#   theme(legend.position = "bottom",
+#         axis.title.y = element_text(size = 11, face = "bold"),
+#         axis.title.x = element_text(size = 11, face = "bold"),
+#         strip.text.x = element_text(size = 11, face = "bold.italic"))
+```
+
+```{r show all interactive tables, echo=FALSE}
+
+datatable(ALL_ENV_PROTEIN, options = list(pageLength = 35)) %>%
+    formatRound(columns = colnames(ALL_ENV_PROTEIN)[c(4:9, 11)],
+                digits=3)
+```
+
+
+
+```{r Show all graphs, echo=FALSE}
+ggplot(data = ALL_ENV_PROTEIN, aes(x = Rank, 
+                                   y = Shannon_Index, 
+                                   colour = as.factor(GROUP))) +
+  geom_point() + 
+  facet_wrap(.~VISIT_NO,
+             labeller = labeller(VISIT_NO = study_week_label)) + 
+  scale_color_brewer(palette = "Dark2") +
+  labs(x = "Shannon's Index",
+       y = "Rank",
+       colour = "Group",
+       title = "All Env Protein") + theme_bw() +
+  theme(legend.position = "bottom",
+        axis.title.y = element_text(size = 11, face = "bold"),
+        axis.title.x = element_text(size = 11, face = "bold"),
+        strip.text.x = element_text(size = 11, face = "bold.italic"))
+
+# ggplot(data = CLADE_C, aes(x = Rank, 
+#                                    y = Shannon_Index, 
+#                                    colour = as.factor(GROUP))) +
+#   geom_point() + 
+#   facet_wrap(.~VISIT_NO,
+#              labeller = labeller(VISIT_NO = study_week_label)) + 
+#   scale_color_brewer(palette = "Dark2") +
+#   labs(x = "Shannon's Index",
+#        y = "Rank",
+#        colour = "Group",
+#        title = "Clade C") + theme_bw() +
+#   theme(legend.position = "bottom",
+#         axis.title.y = element_text(size = 11, face = "bold"),
+#         axis.title.x = element_text(size = 11, face = "bold"),
+#         strip.text.x = element_text(size = 11, face = "bold.italic"))
+
+# ggplot(data = TRIVALENT, aes(x = Rank, 
+#                                    y = Shannon_Index, 
+#                                    colour = as.factor(GROUP))) +
+#   geom_point() + 
+#   facet_wrap(.~VISIT_NO,
+#              labeller = labeller(VISIT_NO = study_week_label)) + 
+#   scale_color_brewer(palette = "Dark2") +
+#   labs(x = "Shannon's Index",
+#        y = "Rank",
+#        colour = "Group",
+#        title = "Trivalent") + theme_bw() +
+#   theme(legend.position = "bottom",
+#         axis.title.y = element_text(size = 11, face = "bold"),
+#         axis.title.x = element_text(size = 11, face = "bold"),
+#         strip.text.x = element_text(size = 11, face = "bold.italic"))
+
+```
+```{r Sub-sample, echo=FALSE}
+set.seed(12345)
+SUB_ALL_ENV_PROTEIN_23 = ALL_ENV_PROTEIN_23[sample(c(1:35), 20, replace = FALSE), 1:6]
+
+SUB_ALL_ENV_PROTEIN_23 = SUB_ALL_ENV_PROTEIN_23 %>% select(TITER.1086c, TITER.A244,
+                                            TITER.CAP174c, TITER.CAP260c,
+                                            TITER.Ko224c, TITER.CH505)
+
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_23 = SUB_ALL_ENV_PROTEIN_23
+
+for (i in 1:ncol(SUB_ALL_ENV_PROTEIN_23)) {
+  ABUNDANCE_SUB_ALL_ENV_PROTEIN_23[i] = ABUNDANCE_SUB_ALL_ENV_PROTEIN_23[i] / sum(ABUNDANCE_SUB_ALL_ENV_PROTEIN_23[i])
+}
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_23$Shannon_Index = apply(ABUNDANCE_SUB_ALL_ENV_PROTEIN_23,
+                                                   1,
+                                                   function(x) sum(x*log(x)*-1))
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_23$Rank = rank(desc(ABUNDANCE_SUB_ALL_ENV_PROTEIN_23$Shannon_Index))
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_23$ROW_NAME = rownames(ABUNDANCE_SUB_ALL_ENV_PROTEIN_23)
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_23$VISIT_NO = 23
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_23$ROW_NAME = gsub(" W23", "", ABUNDANCE_SUB_ALL_ENV_PROTEIN_23$ROW_NAME)
+colnames(ABUNDANCE_SUB_ALL_ENV_PROTEIN_23)[colnames(ABUNDANCE_SUB_ALL_ENV_PROTEIN_23) == 'ROW_NAME'] = "PARTICIPANTID"
+
+SUB_ALL_ENV_PROTEIN_143 = TITER_DF_143 %>% filter(PARTICIPANTID %in% ABUNDANCE_SUB_ALL_ENV_PROTEIN_23$PARTICIPANTID)
+
+SUB_ALL_ENV_PROTEIN_143 = SUB_ALL_ENV_PROTEIN_143 %>% select(TITER.1086c, TITER.A244,
+                                            TITER.CAP174c, TITER.CAP260c,
+                                            TITER.Ko224c, TITER.CH505)
+
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_143 = SUB_ALL_ENV_PROTEIN_143
+
+for (i in 1:ncol(SUB_ALL_ENV_PROTEIN_143)) {
+  ABUNDANCE_SUB_ALL_ENV_PROTEIN_143[i] = ABUNDANCE_SUB_ALL_ENV_PROTEIN_143[i] / sum(ABUNDANCE_SUB_ALL_ENV_PROTEIN_143[i])
+}
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_143$Shannon_Index = apply(ABUNDANCE_SUB_ALL_ENV_PROTEIN_143,
+                                                   1,
+                                                   function(x) sum(x*log(x)*-1))
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_143$Rank = rank(desc(ABUNDANCE_SUB_ALL_ENV_PROTEIN_143$Shannon_Index))
+
+
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_143$ROW_NAME = rownames(ABUNDANCE_SUB_ALL_ENV_PROTEIN_143)
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_143$VISIT_NO = 143
+ABUNDANCE_SUB_ALL_ENV_PROTEIN_143$ROW_NAME = gsub(" W143", "", ABUNDANCE_SUB_ALL_ENV_PROTEIN_143$ROW_NAME)
+colnames(ABUNDANCE_SUB_ALL_ENV_PROTEIN_143)[colnames(ABUNDANCE_SUB_ALL_ENV_PROTEIN_143) == 'ROW_NAME'] = "PARTICIPANTID"
+
+
+ABUNDANCE_SUB_ALL_ENV_PROTEIN = rbind.data.frame(ABUNDANCE_SUB_ALL_ENV_PROTEIN_23,
+                                             ABUNDANCE_SUB_ALL_ENV_PROTEIN_143)
+
+ABUNDANCE_SUB_ALL_ENV_PROTEIN = ABUNDANCE_SUB_ALL_ENV_PROTEIN %>% select(PARTICIPANTID, VISIT_NO, Rank)
+ABUNDANCE_SUB_ALL_ENV_PROTEIN$DF = "Sub"
+SELECTED_DF = ALL_ENV_PROTEIN %>% filter(PARTICIPANTID %in% ABUNDANCE_SUB_ALL_ENV_PROTEIN$PARTICIPANTID) %>% 
+  select(PARTICIPANTID, VISIT_NO, Rank)
+
+SELECTED_DF$DF = "Full"
+
+SELECTED_DF = rbind.data.frame(SELECTED_DF, ABUNDANCE_SUB_ALL_ENV_PROTEIN)
+
+
+```
+
+## Subsets of the samples
+```{r Sub sample graph}
+ggplot(data = SELECTED_DF,
+       aes(x = DF, y = Rank, group = PARTICIPANTID, colour = PARTICIPANTID)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(.~VISIT_NO,
+             labeller = labeller(VISIT_NO = study_week_label)) +
+  theme_bw( ) +
+  theme(legend.position = "none",
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold"))
+
+```
+
+## Incorporate Phylogenic Tree
+
+$$
+H = - \sum l(b)*p_b*ln(p_b)\\
+where \space l(b) \space is \space the \space length \space of \space branch \space to \space b
+$$
