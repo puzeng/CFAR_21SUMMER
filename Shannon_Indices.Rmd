@@ -21,6 +21,7 @@ library(qwraps2)
 library(DT)
 library(knitr)
 library(reshape2)
+library(patchwork)
 ```
 
 ## Shannon Index
@@ -449,7 +450,7 @@ Subsets_Antigens = ALL_ENV_PROTEIN  %>%
               mutate(Antigen_Status = "Clade C"))
 
 
-ggplot(data = Subsets_Antigens,
+p1 = ggplot(data = Subsets_Antigens,
        aes(x = Antigen_Status,
            y = Rank,
            group = PARTICIPANTID,
@@ -462,10 +463,64 @@ ggplot(data = Subsets_Antigens,
         axis.title.x = element_text(face = "bold"),
         axis.title.y = element_text(face = "bold"),
         strip.text.x = element_text(face = "bold")) +
-  labs(x = "Different Antigen Combinations",
+  labs(x = "Different vaccine design",
        title = "Breadth of ADCC by Shannon's Index",
        colour = "Experimental group") 
+
 ```
+
+```{r Subsets if titers by PCA}
+CHG_RANK_23 = read.csv("CHG_RANK_23.csv")
+CHG_RANK_23$VISIT_NO = "23"
+CHG_RANK_23 = melt(CHG_RANK_23, id.vars = c("PARTICIPANTID", "VISIT_NO", "GROUP"),
+     variable.name = "Antigen_Status")
+names(CHG_RANK_23)[names(CHG_RANK_23) == "value"] = "Rank"
+
+
+
+CHG_RANK_143 = read.csv("CHG_RANK_143.csv")
+CHG_RANK_143$VISIT_NO = "143"
+CHG_RANK_143 = melt(CHG_RANK_143, id.vars = c("PARTICIPANTID", "VISIT_NO", "GROUP"),
+     variable.name = "Antigen_Status")
+names(CHG_RANK_143)[names(CHG_RANK_143) == "value"] = "Rank"
+
+CHG_RANK = rbind.data.frame(CHG_RANK_23,
+                            CHG_RANK_143)
+
+CHG_RANK$Antigen_Status = gsub("RANK_", "", CHG_RANK$Antigen_Status)
+CHG_RANK$Antigen_Status = gsub("_", " ", CHG_RANK$Antigen_Status)
+CHG_RANK$Antigen_Status[CHG_RANK$Antigen_Status == "ALL PROTEIN"] = "All Env Protein"
+CHG_RANK$Antigen_Status[CHG_RANK$Antigen_Status == "CLADE C"] = "Clade C"
+CHG_RANK$Antigen_Status[CHG_RANK$Antigen_Status == "TRIVALENT"] = "Trivalent"
+
+#CHG_RANK$Rank = as.character(CHG_RANK$Rank)
+CHG_RANK$VISIT_NO = factor(CHG_RANK$VISIT_NO, levels = c("23", "143"))
+CHG_RANK$GROUP = as.character(CHG_RANK$GROUP)
+
+p2 = ggplot(data = CHG_RANK %>% filter(Antigen_Status != "SUB ALL PROTEIN"),
+       aes(x = Antigen_Status,
+           y = Rank,
+           group = PARTICIPANTID,
+           colour = GROUP)) +
+  geom_point() + geom_line() +
+  facet_wrap(.~VISIT_NO,
+             labeller = labeller(VISIT_NO = study_week_label)) +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold")) +
+  labs(x = "Different vaccine design",
+       title = "Breadth of ADCC by PCA",
+       colour = "Experimental group") 
+```
+
+```{r patch p1 and p2, fig.height=5, fig.width=13}
+p1 + 
+  p2 + 
+  plot_layout(ncol = 2, guides = "collect") & theme(legend.position = "bottom")
+```
+
 
 ## Incorporate Phylogenic Tree
 
