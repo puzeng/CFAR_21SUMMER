@@ -301,8 +301,8 @@ ggplot(data = ALL_ENV_PROTEIN, aes(x = Rank,
   facet_wrap(.~VISIT_NO,
              labeller = labeller(VISIT_NO = study_week_label)) + 
   scale_color_brewer(palette = "Dark2") +
-  labs(x = "Shannon's Index",
-       y = "Rank",
+  labs(x = "Rank",
+       y = "Shannon's Index",
        colour = "Group",
        title = "All Env Protein") + theme_bw() +
   theme(legend.position = "bottom",
@@ -417,6 +417,54 @@ ggplot(data = SELECTED_DF,
         axis.title.y = element_text(face = "bold"),
         strip.text.x = element_text(face = "bold"))
 
+```
+
+### Subsets of Antigens
+
+Table 1. gp120 Env protein in different vaccine design  
+
+| gp120 Env protein | All Env Protein | Clade C | Trivalent |  
+|:------------------|----------------:|--------:|----------:|  
+|     1086c         |         X       |    X    |           |  
+|     A244          |         X       |         |           |  
+|     CAP174c       |         X       |    X    |     X     |  
+|     CAP260c       |         X       |    X    |     X     |  
+|     Ko224c        |         X       |    X    |     X     |  
+|     CH505         |         X       |         |           |  
+
+
+
+
+
+```{r Subsets of Antigens}
+
+Subsets_Antigens = ALL_ENV_PROTEIN  %>% 
+  select(PARTICIPANTID, VISIT_NO, Rank, GROUP) %>% 
+  mutate(Antigen_Status = "All Env Protein") %>% 
+  rbind(TRIVALENT %>% 
+              select(PARTICIPANTID, VISIT_NO, Rank, GROUP) %>% 
+              mutate(Antigen_Status = "Trivalent")) %>% 
+  rbind(CLADE_C %>% 
+              select(PARTICIPANTID, VISIT_NO, Rank, GROUP) %>% 
+              mutate(Antigen_Status = "Clade C"))
+
+
+ggplot(data = Subsets_Antigens,
+       aes(x = Antigen_Status,
+           y = Rank,
+           group = PARTICIPANTID,
+           colour = GROUP)) +
+  geom_point() + geom_line() +
+  facet_wrap(.~VISIT_NO,
+             labeller = labeller(VISIT_NO = study_week_label)) +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"),
+        strip.text.x = element_text(face = "bold")) +
+  labs(x = "Different Antigen Combinations",
+       title = "Breadth of ADCC by Shannon's Index",
+       colour = "Experimental group") 
 ```
 
 ## Incorporate Phylogenic Tree
